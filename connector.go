@@ -95,8 +95,8 @@ func (c *SQLConnection) GetDatabase() *sqlx.DB {
 
 		u := connectionString(clean)
 
-		driverName := fmt.Sprintf("%s-%s", clean.Scheme, "withHooks")
-		registerTracingHooks(clean.Scheme, driverName)
+		driverName := fmt.Sprintf("%s-%s-%s", clean.Scheme, "withHooks", time.Now())
+		registerTracingHooks(clean.Scheme, driverName, c.L)
 		if c.db, err = sqlx.Open(driverName, u); err != nil {
 			return errors.Errorf("Could not Connect to SQL: %s", err)
 		} else if err := c.db.Ping(); err != nil {
@@ -181,13 +181,15 @@ func connectionString(clean *url.URL) string {
 	return u
 }
 
-func registerTracingHooks(scheme, driverName string) {
+func registerTracingHooks(scheme, driverName string, logger logrus.FieldLogger) {
 	traceHooks := othooks.New(opentracing.GlobalTracer())
 
 	switch strings.ToLower(scheme) {
 	case "mysql":
 		sql.Register(driverName, sqlhooks.Wrap(&mysql.MySQLDriver{}, traceHooks))
+		logger.Infof("Got here - Amir! - MySQL")
 	case "postgres":
 		sql.Register(driverName, sqlhooks.Wrap(&pq.Driver{}, traceHooks))
+		logger.Infof("Got here - Amir! - Postgres")
 	}
 }
