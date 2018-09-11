@@ -21,15 +21,19 @@
 package sqlcon
 
 import (
+	"database/sql"
 	"net/url"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/gchaincl/sqlhooks"
+	"github.com/gchaincl/sqlhooks/hooks/othooks"
+	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -88,6 +92,8 @@ func (c *SQLConnection) GetDatabase() *sqlx.DB {
 		c.L.Infof("Connecting with %s", c.URL.Scheme+"://*:*@"+c.URL.Host+c.URL.Path+"?"+clean.RawQuery)
 
 		u := connectionString(clean)
+
+		registerTracingHooks(clean)
 		if c.db, err = sqlx.Open(clean.Scheme, u); err != nil {
 			return errors.Errorf("Could not Connect to SQL: %s", err)
 		} else if err := c.db.Ping(); err != nil {
@@ -170,4 +176,15 @@ func connectionString(clean *url.URL) string {
 		u = strings.Replace(u, "mysql://", "", -1)
 	}
 	return u
+}
+
+func registerTracingHooks(clean *url.URL) {
+	traceHooks := othooks.New(opentracing.GlobalTracer())
+
+	switch strings.ToLower(clean.Scheme) {
+	case "mysql":
+		sql.Register(clean.Scheme, sqlhooks.Wrap(&mysql.MySQLDriver{}, traceHooks))
+	case "postgres":
+		sql.Register(clean.Scheme, sqlhooks.Wrap(&pq.Driver{}, traceHooks))
+	}
 }
