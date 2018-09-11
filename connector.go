@@ -28,6 +28,8 @@ import (
 	"strings"
 	"time"
 
+	"fmt"
+
 	"github.com/gchaincl/sqlhooks"
 	"github.com/gchaincl/sqlhooks/hooks/othooks"
 	"github.com/go-sql-driver/mysql"
@@ -93,8 +95,9 @@ func (c *SQLConnection) GetDatabase() *sqlx.DB {
 
 		u := connectionString(clean)
 
-		registerTracingHooks(clean)
-		if c.db, err = sqlx.Open(clean.Scheme, u); err != nil {
+		driverName := fmt.Sprintf("%s-%s", clean.Scheme, "withHooks")
+		registerTracingHooks(clean.Scheme, driverName)
+		if c.db, err = sqlx.Open(driverName, u); err != nil {
 			return errors.Errorf("Could not Connect to SQL: %s", err)
 		} else if err := c.db.Ping(); err != nil {
 			return errors.Errorf("Could not Connect to SQL: %s", err)
@@ -178,13 +181,13 @@ func connectionString(clean *url.URL) string {
 	return u
 }
 
-func registerTracingHooks(clean *url.URL) {
+func registerTracingHooks(scheme, driverName string) {
 	traceHooks := othooks.New(opentracing.GlobalTracer())
 
-	switch strings.ToLower(clean.Scheme) {
+	switch strings.ToLower(scheme) {
 	case "mysql":
-		sql.Register(clean.Scheme, sqlhooks.Wrap(&mysql.MySQLDriver{}, traceHooks))
+		sql.Register(driverName, sqlhooks.Wrap(&mysql.MySQLDriver{}, traceHooks))
 	case "postgres":
-		sql.Register(clean.Scheme, sqlhooks.Wrap(&pq.Driver{}, traceHooks))
+		sql.Register(driverName, sqlhooks.Wrap(&pq.Driver{}, traceHooks))
 	}
 }
