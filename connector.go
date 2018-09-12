@@ -30,12 +30,14 @@ import (
 
 	"fmt"
 
+	"context"
+
 	"github.com/gchaincl/sqlhooks"
-	"github.com/gchaincl/sqlhooks/hooks/othooks"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -95,7 +97,7 @@ func (c *SQLConnection) GetDatabase() *sqlx.DB {
 
 		u := connectionString(clean)
 
-		driverName := fmt.Sprintf("%s-%s-%s", clean.Scheme, "withHooks", time.Now())
+		driverName := fmt.Sprintf("%s-%s-%s", clean.Scheme, "withHooks", strconv.FormatInt(time.Now().UTC().UnixNano(), 10))
 		registerTracingHooks(clean.Scheme, driverName, c.L)
 		if c.db, err = sqlx.Open(driverName, u); err != nil {
 			return errors.Errorf("Could not Connect to SQL: %s", err)
@@ -182,7 +184,7 @@ func connectionString(clean *url.URL) string {
 }
 
 func registerTracingHooks(scheme, driverName string, logger logrus.FieldLogger) {
-	traceHooks := othooks.New(opentracing.GlobalTracer())
+	traceHooks := New(opentracing.GlobalTracer(), logger)
 
 	switch strings.ToLower(scheme) {
 	case "mysql":
@@ -192,4 +194,55 @@ func registerTracingHooks(scheme, driverName string, logger logrus.FieldLogger) 
 		sql.Register(driverName, sqlhooks.Wrap(&pq.Driver{}, traceHooks))
 		logger.Infof("Got here - Amir! - Postgres")
 	}
+}
+
+type Hook struct {
+	tracer opentracing.Tracer
+	logger logrus.FieldLogger
+}
+
+func New(tracer opentracing.Tracer, logger logrus.FieldLogger) *Hook {
+	return &Hook{tracer: tracer, logger: logger}
+}
+
+func (h *Hook) Before(ctx context.Context, query string, args ...interface{}) (context.Context, error) {
+	h.logger.Infof("Amir - hook - BEFORE - %s", query)
+	parent := opentracing.SpanFromContext(ctx)
+	if parent == nil {
+		return ctx, nil
+	}
+
+	span := h.tracer.StartSpan("sql", opentracing.ChildOf(parent.Context()))
+	span.LogFields(
+		log.String("query", query),
+		log.Object("args", args),
+	)
+
+	return opentracing.ContextWithSpan(ctx, span), nil
+}
+
+func (h *Hook) After(ctx context.Context, query string, args ...interface{}) (context.Context, error) {
+	h.logger.Infof("Amir - hook - AFTER - %s", query)
+
+	span := opentracing.SpanFromContext(ctx)
+	if span != nil {
+		defer span.Finish()
+	}
+
+	return ctx, nil
+}
+
+func (h *Hook) OnError(ctx context.Context, err error, query string, args ...interface{}) error {
+	h.logger.Infof("Amir - hook - ON ERROR - %s", query)
+
+	span := opentracing.SpanFromContext(ctx)
+	if span != nil {
+		defer span.Finish()
+		span.SetTag("error", true)
+		span.LogFields(
+			log.Error(err),
+		)
+	}
+
+	return err
 }

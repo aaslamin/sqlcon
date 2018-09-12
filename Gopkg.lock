@@ -69,12 +69,9 @@
   version = "v0.3.3"
 
 [[projects]]
-  digest = "1:f7f0a059890e76d9893abd72f0493eb862d8dd99613b0e2b5a7811c3f4b64dae"
+  digest = "1:56a43d8f03f5f60fa0a5e8b66903a54a97ae52500d8497059ea8c3d8fbabafa4"
   name = "github.com/gchaincl/sqlhooks"
-  packages = [
-    ".",
-    "hooks/othooks",
-  ]
+  packages = ["."]
   pruneopts = "UT"
   revision = "928fba38878d453967fcf9b4a0b7952b90c94d34"
   version = "v1.1.0"
@@ -267,11 +264,11 @@
   analyzer-version = 1
   input-imports = [
     "github.com/gchaincl/sqlhooks",
-    "github.com/gchaincl/sqlhooks/hooks/othooks",
     "github.com/go-sql-driver/mysql",
     "github.com/jmoiron/sqlx",
     "github.com/lib/pq",
     "github.com/opentracing/opentracing-go",
+    "github.com/opentracing/opentracing-go/log",
     "github.com/ory/dockertest",
     "github.com/ory/herodot",
     "github.com/pkg/errors",
