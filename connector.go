@@ -32,6 +32,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"database/sql"
 )
 
 type SQLConnection struct {
@@ -81,6 +82,7 @@ func (c *SQLConnection) GetDatabase() *sqlx.DB {
 	}
 
 	var err error
+	var db *sql.DB
 
 	clean := cleanURLQuery(c.URL)
 
@@ -88,9 +90,12 @@ func (c *SQLConnection) GetDatabase() *sqlx.DB {
 		c.L.Infof("Connecting with %s", c.URL.Scheme+"://*:*@"+c.URL.Host+c.URL.Path+"?"+clean.RawQuery)
 
 		u := connectionString(clean)
-		if c.db, err = sqlx.Open(clean.Scheme, u); err != nil {
+		if db, err = sql.Open("instrumented-mysql", u); err != nil {
 			return errors.Errorf("Could not Connect to SQL: %s", err)
-		} else if err := c.db.Ping(); err != nil {
+		}
+
+		c.db = sqlx.NewDb(db, clean.Scheme)
+		if err := c.db.Ping(); err != nil {
 			return errors.Errorf("Could not Connect to SQL: %s", err)
 		}
 
